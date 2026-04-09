@@ -1,4 +1,3 @@
-# I added 7 Apr 2026
 # Use a stable Python base image
 FROM python:3.10-slim
 
@@ -21,15 +20,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Upgrade pip to ensure the resolver works correctly
 RUN pip install --no-cache-dir --upgrade pip
 
-# HARDCODE THE MATRIX: Bypass requirements.txt entirely.
-# This pulls GraphRAG v0.1.1 directly from GitHub and satisfies all LangChain constraints.
+# Step 1: Install the UI framework and stable background dependencies
+# ADDED FIX: Pin jinja2 and starlette to stop the templating crash
 RUN pip install --no-cache-dir \
-    git+https://github.com/microsoft/graphrag.git@v0.1.1 \
-    gradio \
+    gradio==4.44.1 \
+    huggingface_hub==0.23.4 \
+    pydantic==2.7.4 \
+    jinja2==3.1.4 \
+    starlette==0.38.2 \
     fastapi \
     uvicorn \
     python-dotenv \
-    pydantic \
     pandas \
     tiktoken \
     langchain==0.2.16 \
@@ -42,6 +43,10 @@ RUN pip install --no-cache-dir \
     ollama \
     plotly
 
+# Step 2: Install GraphRAG separately to bypass the aiofiles conflict
+RUN pip install --no-cache-dir \
+    git+https://github.com/microsoft/graphrag.git@v0.1.1
+
 # Copy the repository code into the container
 COPY . .
 
@@ -49,18 +54,25 @@ COPY . .
 # 1. Revert the import path in api.py to match the v0.1.1 Git tag
 RUN sed -i 's/graphrag.query.llm.text_utils/graphrag.query.context_builder.entity_extraction/g' api.py
 
-# 2. Force FastAPI and Gradio to bind to 0.0.0.0 instead of 127.0.0.1
-# This allows Podman to route traffic from your host machine into the container
+# 2. Force FastAPI and Gradio to bind to 0.0.0.0
 RUN sed -i 's/127.0.0.1/0.0.0.0/g' api.py
 RUN sed -i 's/127.0.0.1/0.0.0.0/g' app.py
 RUN sed -i 's/127.0.0.1/0.0.0.0/g' index_app.py
+
+# 3. Fix hardcoded Ollama hostnames
+RUN sed -i 's/localhost:11434/ollama:11434/g' app.py
+RUN sed -i 's/localhost:11434/ollama:11434/g' index_app.py
+RUN sed -i 's/localhost:11434/ollama:11434/g' api.py
+
+# 4. FIX: Inject an explicit boolean check at the top of the function to stop Pydantic crashes
+RUN sed -i 's/def _json_schema_to_python_type(schema, defs):/def _json_schema_to_python_type(schema, defs):\n    if isinstance(schema, bool):\n        return "Any"/g' /usr/local/lib/python3.10/site-packages/gradio_client/utils.py
 
 # Set up directories and non-root user for Podman
 RUN mkdir -p ragtest/input ragtest/output ragtest/cache
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 
-# Expose the API port (8012 based on your logs) and UI ports (7860, 7861)
+# Expose the API port (8012) and UI ports (7860, 7861)
 EXPOSE 8012 7860 7861
 
 # Start the API

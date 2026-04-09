@@ -7,7 +7,8 @@ services:
     ports:
       - "8012:8012"
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # THE FIX: Added /v1 to point to Ollama's OpenAI-compatible endpoint
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
       - GRAPHRAG_API_KEY=any_string_will_do
     volumes:
       - ./inputs:/app/inputs
@@ -24,10 +25,14 @@ services:
     ports:
       - "7860:7860"
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # THE FIX: Added /v1 here as well
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
       - GRAPHRAG_API_KEY=any_string_will_do
       - API_URL=http://graphrag-api:8012 
       - GRADIO_SERVER_NAME=0.0.0.0
+      - LLM_API_BASE=http://ollama:11434/v1
+      - EMBEDDINGS_API_BASE=http://ollama:11434/v1
+      - API_BASE_URL=http://graphrag-api:8012
     volumes:
       - ./inputs:/app/inputs
       - ./output:/app/output
@@ -35,7 +40,7 @@ services:
     depends_on:
       - graphrag-api
 
-  # 3. NEW: The Data Indexing UI
+  # 3. The Data Indexing UI
   graphrag-indexer:
     build: .
     container_name: graphrag-indexer
@@ -43,10 +48,14 @@ services:
     ports:
       - "7861:7861"
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # THE FIX: Added /v1 here as well
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
       - GRAPHRAG_API_KEY=any_string_will_do
       - API_URL=http://graphrag-api:8012 
       - GRADIO_SERVER_NAME=0.0.0.0
+      - LLM_API_BASE=http://ollama:11434/v1
+      - EMBEDDINGS_API_BASE=http://ollama:11434/v1
+      - API_BASE_URL=http://graphrag-api:8012
     volumes:
       - ./inputs:/app/inputs
       - ./output:/app/output
