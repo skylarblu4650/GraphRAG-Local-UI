@@ -1,76 +1,74 @@
+# cbt-graph-rag-containerised: Path-Unified Orchestration
+# Optimized for Podman on macOS (2026)
+
+version: '3.8'
+
 services:
   # 1. The FastAPI Backend
   graphrag-api:
     build: .
     container_name: graphrag-api
-    command: python api.py
+    environment:
+      - PYTHONPATH=/app
+      - GRAPHRAG_API_KEY=ollama
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
     ports:
       - "8012:8012"
-    environment:
-      # THE FIX: Added /v1 to point to Ollama's OpenAI-compatible endpoint
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-      - GRAPHRAG_API_KEY=any_string_will_do
     volumes:
-      - ./inputs:/app/inputs
-      - ./output:/app/output
-      - ./ragtest:/app/ragtest 
-    depends_on:
-      - ollama
+      - ./input:/app/input
+      - ./indexing:/app/indexing
+      - ./lancedb:/app/lancedb
+      # PATH UNIFICATION: Map Mac data to both possible internal paths
+      - ./indexing/output:/app/output 
+      - ./indexing/output:/app/indexing/output
+    command: python api.py --host 0.0.0.0 --port 8012
 
   # 2. The Main Chat UI
   graphrag-ui:
     build: .
     container_name: graphrag-ui
-    command: python app.py 
-    ports:
-      - "7860:7860"
     environment:
-      # THE FIX: Added /v1 here as well
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-      - GRAPHRAG_API_KEY=any_string_will_do
+      - PYTHONPATH=/app
+      - GRAPHRAG_API_KEY=ollama
       - API_URL=http://graphrag-api:8012 
       - GRADIO_SERVER_NAME=0.0.0.0
-      - LLM_API_BASE=http://ollama:11434/v1
-      - EMBEDDINGS_API_BASE=http://ollama:11434/v1
-      - API_BASE_URL=http://graphrag-api:8012
+      - LLM_API_BASE=http://host.docker.internal:11434/v1
+      - EMBEDDINGS_API_BASE=http://host.docker.internal:11434/v1
+    ports:
+      - "7860:7860"
     volumes:
-      - ./inputs:/app/inputs
-      - ./output:/app/output
-      - ./ragtest:/app/ragtest
+      - ./input:/app/input
+      - ./indexing:/app/indexing
+      - ./indexing/output:/app/output
+      - ./indexing/output:/app/indexing/output
     depends_on:
       - graphrag-api
+    command: python app.py
 
   # 3. The Data Indexing UI
   graphrag-indexer:
     build: .
     container_name: graphrag-indexer
-    command: python index_app.py 
-    ports:
-      - "7861:7861"
     environment:
-      # THE FIX: Added /v1 here as well
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-      - GRAPHRAG_API_KEY=any_string_will_do
+      - PYTHONPATH=/app
+      - GRAPHRAG_API_KEY=ollama
       - API_URL=http://graphrag-api:8012 
       - GRADIO_SERVER_NAME=0.0.0.0
-      - LLM_API_BASE=http://ollama:11434/v1
-      - EMBEDDINGS_API_BASE=http://ollama:11434/v1
-      - API_BASE_URL=http://graphrag-api:8012
+      - LLM_API_BASE=http://host.docker.internal:11434/v1
+      - EMBEDDINGS_API_BASE=http://host.docker.internal:11434/v1
+    ports:
+      - "7861:7861"
     volumes:
-      - ./inputs:/app/inputs
-      - ./output:/app/output
-      - ./ragtest:/app/ragtest
+      - ./input:/app/input
+      - ./indexing:/app/indexing
+      - ./lancedb:/app/lancedb
+      - ./indexing/output:/app/output
+      - ./indexing/output:/app/indexing/output
     depends_on:
       - graphrag-api
+    command: python index_app.py
 
-  # 4. Local LLM Service
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
-volumes:
-  ollama_data:
+networks:
+  default:
+    name: graphrag-network
+    driver: bridge

@@ -1,0 +1,76 @@
+services:
+  # 1. The FastAPI Backend
+  graphrag-api:
+    build: .
+    container_name: graphrag-api
+    command: python api.py
+    ports:
+      - "8012:8012"
+    environment:
+      # THE FIX: Added /v1 to point to Ollama's OpenAI-compatible endpoint
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - GRAPHRAG_API_KEY=any_string_will_do
+    volumes:
+      - ./inputs:/app/inputs
+      - ./output:/app/output
+      - ./ragtest:/app/ragtest 
+    depends_on:
+      - ollama
+
+  # 2. The Main Chat UI
+  graphrag-ui:
+    build: .
+    container_name: graphrag-ui
+    command: python app.py 
+    ports:
+      - "7860:7860"
+    environment:
+      # THE FIX: Added /v1 here as well
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - GRAPHRAG_API_KEY=any_string_will_do
+      - API_URL=http://graphrag-api:8012 
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - LLM_API_BASE=http://ollama:11434/v1
+      - EMBEDDINGS_API_BASE=http://ollama:11434/v1
+      - API_BASE_URL=http://graphrag-api:8012
+    volumes:
+      - ./inputs:/app/inputs
+      - ./output:/app/output
+      - ./ragtest:/app/ragtest
+    depends_on:
+      - graphrag-api
+
+  # 3. The Data Indexing UI
+  graphrag-indexer:
+    build: .
+    container_name: graphrag-indexer
+    command: python index_app.py 
+    ports:
+      - "7861:7861"
+    environment:
+      # THE FIX: Added /v1 here as well
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - GRAPHRAG_API_KEY=any_string_will_do
+      - API_URL=http://graphrag-api:8012 
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - LLM_API_BASE=http://ollama:11434/v1
+      - EMBEDDINGS_API_BASE=http://ollama:11434/v1
+      - API_BASE_URL=http://graphrag-api:8012
+    volumes:
+      - ./inputs:/app/inputs
+      - ./output:/app/output
+      - ./ragtest:/app/ragtest
+    depends_on:
+      - graphrag-api
+
+  # 4. Local LLM Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
